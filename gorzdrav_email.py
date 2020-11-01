@@ -3,7 +3,7 @@ import smtplib
 from datetime import datetime, timedelta
 from email.message import EmailMessage
 
-
+# пишет лог в stdout и формирует содержание письма для последующей отправки (переменные email_subject и email_body)
 def log(text, stdout=True, e_subject=False, e_body=False, end=''):
     if stdout: print(text, end=end)
     global email_subject
@@ -11,7 +11,7 @@ def log(text, stdout=True, e_subject=False, e_body=False, end=''):
     if e_subject: email_subject = email_subject + text
     if e_body: email_body = email_body = email_body + text + end
 
-
+# отправляет письмо с содержанием из глобальных переменных email_subject, email_body
 def send_email(body_delete_first_line=False):
     global email_body
     if body_delete_first_line:
@@ -22,7 +22,7 @@ def send_email(body_delete_first_line=False):
         msg = EmailMessage()  # дока https://docs.python.org/3/library/email.examples.html#email-examples
         msg['Subject'] = email_subject
         msg['From'] = 'Gorzdrav Spb Bot <...>'
-        msg['To'] = '.'
+        msg['To'] = '...'
         msg.set_content(email_body)
         server.send_message(msg)
         server.quit()
@@ -35,9 +35,9 @@ email_subject = ''
 email_body = ''
 log('Start: ' + (datetime.utcnow() + timedelta(hours=3)).strftime('%Y-%m-%d %H:%M:%S'), e_body=True)
 # https://gorzdrav.spb.ru/service-free-schedule#%5B%7B%22district%22:%2211%22%7D,%7B%22lpu%22:%22147%22%7D%5D
-#gorzdrav_url = 'https://gorzdrav.spb.ru/_api/api/lpu/147/speciality'
+gorzdrav_url = 'https://gorzdrav.spb.ru/_api/api/lpu/147/speciality'
 #gorzdrav_url = 'http://metalcd-altnet.ru/'  # response.encoding = 'windows-1251'
-gorzdrav_url = 'http://metalcd-altnet.ru/speciality.json'
+#gorzdrav_url = 'http://metalcd-altnet.ru/speciality.json'
 specialities = [{'id': '81',  'send_email': True,  'tickets': None, 'name': None},  # Травматолог-ортопед
                 {'id': '48',  'send_email': True,  'tickets': None, 'name': None},  # Отоларинголог
                 {'id': '52',  'send_email': False, 'tickets': None, 'name': None}]  # Педиатр
