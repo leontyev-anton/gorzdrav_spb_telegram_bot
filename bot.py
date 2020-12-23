@@ -5,7 +5,7 @@ import logging
 import pandas
 import psycopg2
 from sqlalchemy import create_engine
-from config import tg_bot_token, pg_host, pg_user, pg_pass, pg_db
+from config import tg_bot_token, tg_author_name, pg_host, pg_user, pg_pass, pg_db
 from aiogram import Bot, Dispatcher, executor, types
 from aiogram.utils.helper import Helper, HelperMode, ListItem
 from aiogram.contrib.fsm_storage.memory import MemoryStorage
@@ -285,7 +285,7 @@ async def echo(message: types.Message):
            'и, при появлении свободного талончика отправляет уведомление в этот чат.\n\n' + records_text_print + '\n' \
            'Для создания нового введите команду /new\n' \
            'Для удаления введите /del\n' \
-           'Автор бота: @leontiev_anton'
+           'Автор бота: ' + tg_author_name
     await message.answer(text)
     datetime_now = datetime.utcnow() + timedelta(hours=3)
     datetime_now = datetime_now.strftime('%Y-%m-%d %H:%M:%S')
