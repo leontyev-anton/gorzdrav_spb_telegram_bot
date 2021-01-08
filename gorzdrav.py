@@ -1,11 +1,13 @@
 # в этом файле описан парсер свободных талончиков -> должен запускаться раз в N минут
+# вернуть в лог время старта скрипта
 
 import requests
 import sys
 import pandas
 import urllib.parse
 import smtplib
-from config import pg_host, pg_user, pg_pass, pg_db, tg_bot_token, tg_chat_id_admin, email_server, email_port, email_user, email_pass, email_notification
+from config import pg_host, pg_user, pg_pass, pg_db, tg_bot_token, tg_chat_id_admin, email_server, email_port, \
+    email_user, email_pass, email_notification
 from sqlalchemy import create_engine  # кажется pandas только через нее может
 from datetime import datetime, timedelta
 from email.message import EmailMessage
@@ -55,6 +57,9 @@ def send_to_admin(text, bot_token, email_title_from='Gorzdrav'):  # вынест
 
 pg = create_engine('postgresql://' + pg_user + ':' + pg_pass + '@' + pg_host + '/' + pg_db)
 lpus = [{'id': '147', 'name': 'ул. Костюшко, д. 4'}, {'id': '112', 'name': 'пр. Ленинский, д. 168, к. 2'} ]
+my_headers = {'User-Agent': 'Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/87.0.4280.66 Safari/537.36',
+              'Referer': 'https://gorzdrav.spb.ru/service-free-schedule',
+              'X-Requested-With': 'XMLHttpRequest'}  # чтобы не выглядеть как бот, будем отправлять запросы с этими заголовками
 
 #нужно дописать чтобы заменить заголовки - чтобы выглядели как у нормального юзера
 #url_spec_prefix = 'http://metalcd-altnet.ru/speciality'; url_spec_postfix = '.json';
@@ -78,7 +83,7 @@ df_specialities = pandas.DataFrame()
 for lpu in lpus:
     url = url_spec_prefix + lpu['id'] + url_spec_postfix
     try:
-        r_specialities = requests.get(url)
+        r_specialities = requests.get(url, headers=my_headers)
         df = pandas.DataFrame.from_dict(r_specialities.json()['result'])
         df['lpu_id'] = lpu['id']
         df['lpu_name'] = lpu['name']
@@ -89,7 +94,7 @@ for lpu in lpus:
 
 
 # запишем специальности в postgres
-if len(df_specialities) >= 13 and len(df_specialities) <= 16:  # все хорошо, обновляем список в postgres
+if len(df_specialities) >= 12 and len(df_specialities) <= 16:  # все хорошо, обновляем список в postgres
     try:
         df_specialities = df_specialities.rename(columns={'id': 'speciality_id'})
         df_specialities_pg = df_specialities.copy()  # скопируем, тк нам в postgres нужно записать только часть полей
@@ -109,7 +114,7 @@ for lpu in lpus:
     if len(df_records[df_records['lpu_id'] == lpu['id']]) > 0:  # если в records есть этот lpu, то распарсим его url
         url = url_doctors_prefix + lpu['id'] + url_doctors_postfix
         try:
-            r_doctors = requests.get(url)
+            r_doctors = requests.get(url, headers=my_headers)
             df = pandas.DataFrame.from_dict(r_doctors.json()['result'])
             df['lpu_id'] = lpu['id']
             df['lpu_name'] = lpu['name']
