@@ -30,7 +30,9 @@ def send_email(text):
     except Exception as e:
         log('Email notification was not sent - error with email sending: ' + str(e) )
 
-
+my_headers = {'User-Agent': 'Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/87.0.4280.66 Safari/537.36',
+              'Referer': 'https://gorzdrav.spb.ru/service-free-schedule',
+              'X-Requested-With': 'XMLHttpRequest'}  # чтобы не выглядеть как бот, будем отправлять запросы с этими заголовками
 
 datetime_now = datetime.utcnow() + timedelta(hours=3)
 log('Start:  ' + datetime_now.strftime('%Y-%m-%d %H:%M:%S' + '. '), end='')
@@ -45,9 +47,8 @@ else:
         #if specialities['speciality_id'][i] == '2' or specialities['speciality_id'][i] == '8' or specialities['speciality_id'][i] == '19':  # 19 - с нулем докторов
         url = 'https://gorzdrav.spb.ru/_api/api/lpu/' + specialities['lpu_id'][i] + '/doctor?specialityId=' + specialities['speciality_id'][i]
         try:
-            response = requests.get(url)
-            json = response.json()
-            json = json['result']
+            response = requests.get(url, headers=my_headers)
+            json = response.json()['result']
         except Exception as e:
             log(f'Exit script. Error parsing from JSON: {e}, url={url}', admin=True)
             sys.exit(1)
@@ -65,7 +66,7 @@ else:
                 time.sleep(1)
 
 
-    if len(df_doctors) >= 50 and len(df_doctors) <= 55:
+    if len(df_doctors) >= 47 and len(df_doctors) <= 55:
         try:
             df_doctors = df_doctors.rename(columns={'id': 'doctor_id'})
             df_doctors.to_sql(name='doctors', con=pg, if_exists='replace', index=False)
