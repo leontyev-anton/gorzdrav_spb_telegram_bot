@@ -89,7 +89,7 @@ for lpu in lpus:
         df['lpu_name'] = lpu['name']
         df_specialities = df_specialities.append(df, ignore_index=True)
     except Exception as e:
-        log(f'Exit script. Error parsing speciality url to DataFrame: {e}', admin=True)
+        log(f'Exit script. Error parsing speciality url {url} to DataFrame: {e}', admin=True)
         myexit(1)
 
 
