@@ -56,7 +56,9 @@ def send_to_admin(text, bot_token, email_title_from='Gorzdrav'):  # вынест
 
 
 pg = create_engine('postgresql://' + pg_user + ':' + pg_pass + '@' + pg_host + '/' + pg_db)
-lpus = [{'id': '147', 'name': 'ул. Костюшко, д. 4'}, {'id': '112', 'name': 'пр. Ленинский, д. 168, к. 2'} ]
+lpus = [{'id': '147', 'name': 'ул. Костюшко, д. 4'}, {'id': '112', 'name': 'пр. Ленинский, д. 168, к. 2'}]
+#lpus = [{'id': '147', 'name': 'ул. Костюшко, д. 4'}]
+#lpus = [{'id': '112', 'name': 'пр. Ленинский, д. 168, к. 2'}]
 my_headers = {'User-Agent': 'Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/87.0.4280.66 Safari/537.36',
               'Referer': 'https://gorzdrav.spb.ru/service-free-schedule',
               'X-Requested-With': 'XMLHttpRequest'}  # чтобы не выглядеть как бот, будем отправлять запросы с этими заголовками
@@ -70,12 +72,12 @@ message_admin=''
 
 # запросим records из Postgres
 try:
-    df_records = pandas.read_sql(sql='SELECT lpu_id, speciality_id, doctor_id, notification_days, chat_id FROM records WHERE date_deleting IS NULL', con=pg)
+    df_records = pandas.read_sql(sql='SELECT record_id, lpu_id, speciality_id, doctor_id, notification_days, chat_id, username FROM records WHERE date_deleting IS NULL', con=pg)
 except Exception as e:
     log(f'Exit script. Error requesting records from Postgres: {e}', admin=True)
     myexit(1)
 
-log(f'We will search {len(df_records)} records ({len(df_records[df_records["speciality_id"].notnull()])} specialities, '
+log(f'\rWe will search {len(df_records)} records ({len(df_records[df_records["speciality_id"].notnull()])} specialities, '
     f'{len(df_records[df_records["doctor_id"].notnull()])} doctors) from {df_records["chat_id"].nunique()} users')
 
 # распарсим специальности из двух lpu gorzdrav'a
@@ -92,11 +94,11 @@ for lpu in lpus:
         log(f'Exit script. Error parsing speciality url {url} to DataFrame: {e}', admin=True)
         myexit(1)
 
-
 # запишем специальности в postgres
-if len(df_specialities) >= 12 and len(df_specialities) <= 16:  # все хорошо, обновляем список в postgres
+df_specialities = df_specialities.rename(columns={'id': 'speciality_id'})
+if len(df_specialities) >= 12 and len(df_specialities) <= 20:  # все хорошо, обновляем список в postgres
     try:
-        df_specialities = df_specialities.rename(columns={'id': 'speciality_id'})
+        #df_specialities = df_specialities.rename(columns={'id': 'speciality_id'})  # было тут, а потом перенес наверх
         df_specialities_pg = df_specialities.copy()  # скопируем, тк нам в postgres нужно записать только часть полей
         df_specialities_pg.drop(['ferId', 'countFreeParticipant', 'countFreeTicket', 'lastDate', 'nearestDate'], inplace=True, axis=1)
         df_specialities_pg.to_sql(name='specialities', con=pg, if_exists='replace', index=False)  # на это изменение триггер никак не срабатывает (даже DELETE строки, а потом APPEND). Еще можно через ручной запуск функции, но это лишняя нагрузка на базу (будет все поля проходить).
@@ -193,7 +195,11 @@ for record in records:
             if response_ok == True:
                 notifications_success += 1
             else:
-                log(f'Script continues. Telegram notification not sent, response.status_code = {response.status_code}, response json ok = {response_ok}', admin=True)
-log(f'{notifications} appointments are available. {notifications_success} success notifications have been sent')
+                response_description = response.json()['description']
+                if response_description == 'Forbidden: bot was blocked by the user':
+                    log(f'Script continues. Telegram notification not sent, response.status_code = {response.status_code}, response json description = {response_description}. record_id: {record["record_id"]}, username: {record["username"]}')
+                else:
+                    log(f'Script continues. Telegram notification not sent, response.status_code = {response.status_code}, response json description = {response_description}. record_id: {record["record_id"]}, username: {record["username"]}', admin=True)
 
+log(f'{notifications} appointments are available. {notifications_success} success notifications have been sent')
 myexit()
