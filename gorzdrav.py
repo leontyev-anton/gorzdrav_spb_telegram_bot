@@ -3,6 +3,7 @@
 
 import requests
 import sys
+import time
 import pandas
 import urllib.parse
 import smtplib
@@ -56,20 +57,20 @@ def send_to_admin(text, bot_token, email_title_from='Gorzdrav'):  # вынест
 
 
 pg = create_engine('postgresql://' + pg_user + ':' + pg_pass + '@' + pg_host + '/' + pg_db)
-lpus = [{'id': '147', 'name': 'ул. Костюшко, д. 4'}, {'id': '112', 'name': 'пр. Ленинский, д. 168, к. 2'}]
+#lpus = [{'id': '147', 'name': 'ул. Костюшко, д. 4'}, {'id': '112', 'name': 'пр. Ленинский, д. 168, к. 2'}]
 #lpus = [{'id': '147', 'name': 'ул. Костюшко, д. 4'}]
-#lpus = [{'id': '112', 'name': 'пр. Ленинский, д. 168, к. 2'}]
-my_headers = {'User-Agent': 'Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/87.0.4280.66 Safari/537.36',
+lpus = [{'id': '112', 'name': 'пр. Ленинский, д. 168, к. 2'}]
+#lpus = [{'id': '459', 'name': 'Поликлиника №48, ул. Благодатная 18'}]
+#нужно дописать чтобы заменить заголовки - чтобы выглядели как у нормального юзера
+my_headers = {'User-Agent': 'Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/93.0.4577.82 Safari/537.36',
               'Referer': 'https://gorzdrav.spb.ru/service-free-schedule',
               'X-Requested-With': 'XMLHttpRequest'}  # чтобы не выглядеть как бот, будем отправлять запросы с этими заголовками
 
-#нужно дописать чтобы заменить заголовки - чтобы выглядели как у нормального юзера
 #url_spec_prefix = 'http://metalcd-altnet.ru/speciality'; url_spec_postfix = '.json';
 #url_doctors_prefix = 'http://metalcd-altnet.ru/doctor'; url_doctors_postfix = '.json';
-url_spec_prefix = 'https://gorzdrav.spb.ru/_api/api/lpu/'; url_spec_postfix = '/speciality';
-url_doctors_prefix = 'https://gorzdrav.spb.ru/_api/api/lpu/'; url_doctors_postfix = '/doctor';
+url_spec_prefix = 'https://gorzdrav.spb.ru/_api/api/v2/schedule/lpu/'; url_spec_postfix = '/specialties';
+url_doctors_prefix = 'https://gorzdrav.spb.ru/_api/api/v2/schedule/lpu/'; url_doctors_middle = '/speciality/' ; url_doctors_postfix = '/doctors';
 message_admin=''
-
 # запросим records из Postgres
 try:
     df_records = pandas.read_sql(sql='SELECT record_id, lpu_id, speciality_id, doctor_id, notification_days, chat_id, username FROM records WHERE date_deleting IS NULL', con=pg)
@@ -80,23 +81,37 @@ except Exception as e:
 log(f'\rWe will search {len(df_records)} records ({len(df_records[df_records["speciality_id"].notnull()])} specialities, '
     f'{len(df_records[df_records["doctor_id"].notnull()])} doctors) from {df_records["chat_id"].nunique()} users')
 
-# распарсим специальности из двух lpu gorzdrav'a
+#распарсим специальности из двух lpu gorzdrav'a
 df_specialities = pandas.DataFrame()
 for lpu in lpus:
     url = url_spec_prefix + lpu['id'] + url_spec_postfix
-    try:
-        r_specialities = requests.get(url, headers=my_headers)
-        df = pandas.DataFrame.from_dict(r_specialities.json()['result'])
-        df['lpu_id'] = lpu['id']
-        df['lpu_name'] = lpu['name']
-        df_specialities = df_specialities.append(df, ignore_index=True)
-    except Exception as e:
-        log(f'Exit script. Error parsing speciality url {url} to DataFrame: {e}', admin=True)
-        myexit(1)
+    repeat = True    # сделаем 3 попытки на запрос
+    iterations = 0
+    while repeat:
+        try:
+            iterations += 1
+            r_specialities = requests.get(url, headers=my_headers)
+            success = r_specialities.json()['success']
+            message = ''; exceptionMessage = ''
+            if success == False:
+                message = r_specialities.json()['message']
+                exceptionMessage = r_specialities.json()['exceptionMessage']
+            df = pandas.DataFrame.from_dict(r_specialities.json()['result'])
+            df['lpu_id'] = lpu['id']
+            df['lpu_name'] = lpu['name']
+            df_specialities = df_specialities.append(df, ignore_index=True)
+            repeat = False
+        except Exception as e:
+            if iterations == 3:
+                log(f'Exit script. Error parsing speciality url {url} to DataFrame: {e}, after {iterations} iterations, '
+                    f'exceptionMessages: {message} {exceptionMessage}', admin=True)
+                myexit(1)
+            else:
+                time.sleep(10 * iterations)
 
-# запишем специальности в postgres
+#запишем специальности в postgres
 df_specialities = df_specialities.rename(columns={'id': 'speciality_id'})
-if len(df_specialities) >= 12 and len(df_specialities) <= 20:  # все хорошо, обновляем список в postgres
+if len(df_specialities) >= 8 and len(df_specialities) <= 20:  # все хорошо, обновляем список в postgres
     try:
         #df_specialities = df_specialities.rename(columns={'id': 'speciality_id'})  # было тут, а потом перенес наверх
         df_specialities_pg = df_specialities.copy()  # скопируем, тк нам в postgres нужно записать только часть полей
@@ -110,21 +125,41 @@ else:
     log(f'Script continues. Specialities amount: {len(df_specialities)} is not normal. No update Postgres', admin=True)  # почему-то для пустого JSON выдает 1, как только не пробовал
 
 
-# распарсим свободные талончики к докторам из двух lpu gorzdrav'a - если в этом есть необходимость
+# сначала выберем lpu_id и speciality_id, где нужно искать доктора
+df_records_doctors = df_records[df_records['doctor_id'] != None].drop_duplicates(subset=['lpu_id', 'speciality_id'])
+# распарсим этих докторов
 df_doctors = pandas.DataFrame()
-for lpu in lpus:
-    if len(df_records[df_records['lpu_id'] == lpu['id']]) > 0:  # если в records есть этот lpu, то распарсим его url
-        url = url_doctors_prefix + lpu['id'] + url_doctors_postfix
-        try:
-            r_doctors = requests.get(url, headers=my_headers)
-            df = pandas.DataFrame.from_dict(r_doctors.json()['result'])
-            df['lpu_id'] = lpu['id']
-            df['lpu_name'] = lpu['name']
-            df = df.rename(columns={'id': 'doctor_id'})
-            df_doctors = df_doctors.append(df, ignore_index=True)
-        except Exception as e:
-             log(f'Exit script. Error parsing doctor url to DataFrame: {e}', admin=True)
-             myexit(1)
+for i in df_records_doctors.index:
+    url = url_doctors_prefix + df_records_doctors['lpu_id'][i] + url_doctors_middle + df_records_doctors['speciality_id'][i] + url_doctors_postfix
+    try:
+        r_doctors = requests.get(url, headers=my_headers)
+        df = pandas.DataFrame.from_dict(r_doctors.json()['result'])
+        df['lpu_id'] = df_records_doctors['lpu_id'][i]
+        for lpu in lpus:
+            if lpu['id'] == df_records_doctors['lpu_id'][i]:
+                lpu_name = lpu['name']
+        df['lpu_name'] = lpu_name
+        df = df.rename(columns={'id': 'doctor_id'})
+        df_doctors = df_doctors.append(df, ignore_index=True)
+    except Exception as e:
+        log(f'Exit script. Error parsing doctor url {url} to DataFrame: {e}', admin=True)
+        myexit(1)
+
+# так было, когда можно было запросить всех докторов учреждения одной страницей
+# for lpu in lpus:
+#     if len(df_records[df_records['lpu_id'] == lpu['id']]) > 0:  # если в records есть этот lpu, то распарсим его url
+#         url = url_doctors_prefix + lpu['id'] + url_doctors_postfix
+#         try:
+#             r_doctors = requests.get(url, headers=my_headers)
+#             df = pandas.DataFrame.from_dict(r_doctors.json()['result'])
+#             df['lpu_id'] = lpu['id']
+#             df['lpu_name'] = lpu['name']
+#             df = df.rename(columns={'id': 'doctor_id'})
+#             df_doctors = df_doctors.append(df, ignore_index=True)
+#         except Exception as e:
+#              log(f'Exit script. Error parsing doctor url to DataFrame: {e}', admin=True)
+#              myexit(1)
+
 
 
 # разберем каждый элемент records и дополним его тем, что найдем в двух списках с gorzdrav'a
