@@ -126,7 +126,7 @@ else:
 
 
 # сначала выберем lpu_id и speciality_id, где нужно искать доктора
-df_records_doctors = df_records[df_records['doctor_id'] != None].drop_duplicates(subset=['lpu_id', 'speciality_id'])
+df_records_doctors = df_records[df_records.doctor_id.notnull()].drop_duplicates(subset=['lpu_id', 'speciality_id'])
 # распарсим этих докторов
 df_doctors = pandas.DataFrame()
 for i in df_records_doctors.index:
