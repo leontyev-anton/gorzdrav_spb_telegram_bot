@@ -1,5 +1,4 @@
 # бот для общения с пользователем -> он должен быть всегда запущенным на сервере и запускаться при его перезагрузке
-# настроить логгирование корректное
 
 import logging
 import pandas
@@ -14,7 +13,7 @@ from aiogram.dispatcher.filters.state import State, StatesGroup
 from datetime import datetime, timedelta
 
 # Configure logging
-logging.basicConfig(level=logging.INFO)
+logging.basicConfig(level=logging.INFO, filename='bot.log', filemode='w', format='%(levelname)s: %(name)s:    %(message)s')
 
 # Initialize bot and dispatcher   https://surik00.gitbooks.io/aiogram-lessons/content/  https://mastergroosha.github.io/telegram-tutorial/docs/lesson_14/
 bot = Bot(token=tg_bot_token)
@@ -35,7 +34,7 @@ class States(StatesGroup):
 def log(text):
     datetime_now = datetime.utcnow() + timedelta(hours=3)
     datetime_now = datetime_now.strftime('%Y-%m-%d %H:%M:%S')
-    print(datetime_now + ': ' + text)
+    logging.info(datetime_now + ': ' + text)
 
 def read_records(chat_id, username):  # функция для чтения текущих записей человека (2 раза используется)
     global pg
@@ -76,7 +75,7 @@ async def new_step_1(message: types.Message, state: FSMContext):
         df_specialities = pandas.read_sql(con=pg, sql='SELECT speciality_id, name, lpu_id, lpu_name FROM specialities')
         df_doctors = pandas.read_sql(con=pg, sql='SELECT comment, doctor_id, name, speciality_id, speciality_name, lpu_id FROM doctors')
     except Exception as e:
-        print(f'Error requesting from Postgres command /new for user:{message.from_user.username}, chat_id:{message.chat.id}: {e}')
+        log(f'Error requesting from Postgres command /new for user:{message.from_user.username}, chat_id:{message.chat.id}: {e}')
         await message.answer('Произошла ошибка. Попробуйте заново, или напишите автору бота.')
     else:
         keyboard = types.ReplyKeyboardMarkup(resize_keyboard=True)
@@ -199,9 +198,9 @@ async def new_step_7(message: types.Message, state: FSMContext):
         try:
             conn = psycopg2.connect(database=pg_db, user=pg_user, password=pg_pass, host=pg_host)
             cursor = conn.cursor()
-            query = 'INSERT INTO records (lpu_id, speciality_id, doctor_id, notification_days, chat_id, '\
-                     'date_creating, date_deleting) VALUES (%s, %s, %s, %s, %s, %s, %s)'
-            data = (lpu_id, speciality_id, doctor_id, notification_days, str(message.chat.id), date_creating, None)
+            query = 'INSERT INTO records (lpu_id, speciality_id, doctor_id, notification_days, chat_id, username, '\
+                     'date_creating, date_deleting) VALUES (%s, %s, %s, %s, %s, %s, %s, %s)'
+            data = (lpu_id, speciality_id, doctor_id, notification_days, str(message.chat.id), message.from_user.username, date_creating, None)
             cursor.execute(query, data)
             conn.commit()
             conn.close()
@@ -280,6 +279,7 @@ async def echo(message: types.Message):
         records_text_print = 'У вас настроен поиск талончиков к:\n'
         for record in records: records_text_print += record['text'] + '\n'
 
+    print(message.from_user.username)
     text = 'Привет! Этот бот позволяет мониторить появление свободных талончиков на сервисе gorzdrav.spb.ru ' \
            'в два отделения 35 детской поликлиники Московского района СПб. Бот опрашивает сервис каждые несколько минут, ' \
            'и, при появлении свободного талончика отправляет уведомление в этот чат.\n\n' + records_text_print + '\n' \
@@ -293,10 +293,7 @@ async def echo(message: types.Message):
 
 
 if __name__ == '__main__':
-    datetime_now = datetime.utcnow() + timedelta(hours=3)
-    print('Start:  ' + datetime_now.strftime('%Y-%m-%d %H:%M:%S'))
-
+    log('Start')
     executor.start_polling(dp, skip_updates=True)
 
-    datetime_now = datetime.utcnow() + timedelta(hours=3)
-    print('Finish:  ' + datetime_now.strftime('%Y-%m-%d %H:%M:%S'))
+    log('Finish')
