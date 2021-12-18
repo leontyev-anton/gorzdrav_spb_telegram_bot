@@ -279,7 +279,6 @@ async def echo(message: types.Message):
         records_text_print = 'У вас настроен поиск талончиков к:\n'
         for record in records: records_text_print += record['text'] + '\n'
 
-    print(message.from_user.username)
     text = 'Привет! Этот бот позволяет мониторить появление свободных талончиков на сервисе gorzdrav.spb.ru ' \
            'в два отделения 35 детской поликлиники Московского района СПб. Бот опрашивает сервис каждые несколько минут, ' \
            'и, при появлении свободного талончика отправляет уведомление в этот чат.\n\n' + records_text_print + '\n' \
