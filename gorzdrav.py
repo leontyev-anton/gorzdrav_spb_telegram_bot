@@ -1,17 +1,18 @@
 # в этом файле описан парсер свободных талончиков -> должен запускаться раз в N минут
 # вернуть в лог время старта скрипта
 
-import requests
+import smtplib
 import sys
 import time
-import pandas
 import urllib.parse
-import smtplib
+from datetime import datetime, timedelta
+from email.message import EmailMessage
+
+import pandas
+import requests
 from config import pg_host, pg_user, pg_pass, pg_db, tg_bot_token, tg_chat_id_admin, email_server, email_port, \
     email_user, email_pass, email_notification
 from sqlalchemy import create_engine  # кажется pandas только через нее может
-from datetime import datetime, timedelta
-from email.message import EmailMessage
 
 def myexit(exitcode=0):
     global message_admin
