@@ -1,13 +1,13 @@
 # этот скрипт делает обновление списка докторов -> достаточно обновление раз в день
+import smtplib
+import sys
+import time
+from datetime import datetime, timedelta
+from email.message import EmailMessage
 
 import pandas
 import requests
-import sys
-import time
-import smtplib
 from config import pg_host, pg_user, pg_pass, pg_db, email_server, email_port, email_user, email_pass, email_notification
-from datetime import datetime, timedelta
-from email.message import EmailMessage
 from sqlalchemy import create_engine
 
 def log(text, end='\r\n', admin=False):
